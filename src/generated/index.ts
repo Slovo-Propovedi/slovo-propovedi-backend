@@ -5,7 +5,7 @@
  * REST API сервиса «Слово.Проповеди».
  * Позволяет управлять проповедями, плейлистами, разделами, загружать файлы и работать с пользователями.
  *
- * OpenAPI spec version: 0.23.1
+ * OpenAPI spec version: 0.23.5
  */
 import * as zod from 'zod';
 
@@ -196,6 +196,12 @@ export const SectionControllerCreateResponse = zod.strictObject({
       title: zod.string(),
       description: zod.string(),
       artwork: zod.string(),
+      artworkBlurhash: zod
+        .string()
+        .nullish()
+        .describe(
+          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+        ),
       position: zod.int(),
       sections: zod.array(
         zod.strictObject({
@@ -213,6 +219,12 @@ export const SectionControllerCreateResponse = zod.strictObject({
           youtubeUrl: zod.string().nullable(),
           artist: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           book: zod.string().nullable(),
           chapter: zod.union([
             zod.int(),
@@ -319,6 +331,12 @@ export const SectionControllerFindAllResponse = zod.strictObject({
           title: zod.string(),
           description: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           position: zod.int(),
           sections: zod.array(
             zod.strictObject({
@@ -336,6 +354,12 @@ export const SectionControllerFindAllResponse = zod.strictObject({
               youtubeUrl: zod.string().nullable(),
               artist: zod.string(),
               artwork: zod.string(),
+              artworkBlurhash: zod
+                .string()
+                .nullish()
+                .describe(
+                  'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                ),
               book: zod.string().nullable(),
               chapter: zod.union([
                 zod.int(),
@@ -457,6 +481,12 @@ export const SectionControllerFindOneResponse = zod.strictObject({
       title: zod.string(),
       description: zod.string(),
       artwork: zod.string(),
+      artworkBlurhash: zod
+        .string()
+        .nullish()
+        .describe(
+          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+        ),
       position: zod.int(),
       sections: zod.array(
         zod.strictObject({
@@ -474,6 +504,12 @@ export const SectionControllerFindOneResponse = zod.strictObject({
           youtubeUrl: zod.string().nullable(),
           artist: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           book: zod.string().nullable(),
           chapter: zod.union([
             zod.int(),
@@ -612,6 +648,12 @@ export const SectionControllerUpdateResponse = zod.strictObject({
       title: zod.string(),
       description: zod.string(),
       artwork: zod.string(),
+      artworkBlurhash: zod
+        .string()
+        .nullish()
+        .describe(
+          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+        ),
       position: zod.int(),
       sections: zod.array(
         zod.strictObject({
@@ -629,6 +671,12 @@ export const SectionControllerUpdateResponse = zod.strictObject({
           youtubeUrl: zod.string().nullable(),
           artist: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           book: zod.string().nullable(),
           chapter: zod.union([
             zod.int(),
@@ -782,6 +830,12 @@ export const PlaylistControllerCreateResponse = zod.strictObject({
   title: zod.string(),
   description: zod.string(),
   artwork: zod.string(),
+  artworkBlurhash: zod
+    .string()
+    .nullish()
+    .describe(
+      'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+    ),
   sections: zod.array(
     zod.strictObject({
       id: zod.string(),
@@ -815,6 +869,12 @@ export const PlaylistControllerCreateResponse = zod.strictObject({
           title: zod.string(),
           description: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           position: zod.int(),
           sections: zod.array(
             zod.strictObject({
@@ -832,6 +892,12 @@ export const PlaylistControllerCreateResponse = zod.strictObject({
               youtubeUrl: zod.string().nullable(),
               artist: zod.string(),
               artwork: zod.string(),
+              artworkBlurhash: zod
+                .string()
+                .nullish()
+                .describe(
+                  'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                ),
               book: zod.string().nullable(),
               chapter: zod.union([
                 zod.int(),
@@ -899,6 +965,12 @@ export const PlaylistControllerCreateResponse = zod.strictObject({
       youtubeUrl: zod.string().nullable(),
       artist: zod.string(),
       artwork: zod.string(),
+      artworkBlurhash: zod
+        .string()
+        .nullish()
+        .describe(
+          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+        ),
       book: zod.string().nullable(),
       chapter: zod.union([
         zod.int(),
@@ -1024,6 +1096,12 @@ export const PlaylistControllerFindAllResponse = zod.strictObject({
       title: zod.string(),
       description: zod.string(),
       artwork: zod.string(),
+      artworkBlurhash: zod
+        .string()
+        .nullish()
+        .describe(
+          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+        ),
       sections: zod.array(
         zod.strictObject({
           id: zod.string(),
@@ -1057,6 +1135,12 @@ export const PlaylistControllerFindAllResponse = zod.strictObject({
               title: zod.string(),
               description: zod.string(),
               artwork: zod.string(),
+              artworkBlurhash: zod
+                .string()
+                .nullish()
+                .describe(
+                  'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                ),
               position: zod.int(),
               sections: zod.array(
                 zod.strictObject({
@@ -1074,6 +1158,12 @@ export const PlaylistControllerFindAllResponse = zod.strictObject({
                   youtubeUrl: zod.string().nullable(),
                   artist: zod.string(),
                   artwork: zod.string(),
+                  artworkBlurhash: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                    ),
                   book: zod.string().nullable(),
                   chapter: zod.union([
                     zod.int(),
@@ -1141,6 +1231,12 @@ export const PlaylistControllerFindAllResponse = zod.strictObject({
           youtubeUrl: zod.string().nullable(),
           artist: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           book: zod.string().nullable(),
           chapter: zod.union([
             zod.int(),
@@ -1235,6 +1331,12 @@ export const PlaylistControllerFindOneResponse = zod.strictObject({
   title: zod.string(),
   description: zod.string(),
   artwork: zod.string(),
+  artworkBlurhash: zod
+    .string()
+    .nullish()
+    .describe(
+      'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+    ),
   sections: zod.array(
     zod.strictObject({
       id: zod.string(),
@@ -1268,6 +1370,12 @@ export const PlaylistControllerFindOneResponse = zod.strictObject({
           title: zod.string(),
           description: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           position: zod.int(),
           sections: zod.array(
             zod.strictObject({
@@ -1285,6 +1393,12 @@ export const PlaylistControllerFindOneResponse = zod.strictObject({
               youtubeUrl: zod.string().nullable(),
               artist: zod.string(),
               artwork: zod.string(),
+              artworkBlurhash: zod
+                .string()
+                .nullish()
+                .describe(
+                  'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                ),
               book: zod.string().nullable(),
               chapter: zod.union([
                 zod.int(),
@@ -1352,6 +1466,12 @@ export const PlaylistControllerFindOneResponse = zod.strictObject({
       youtubeUrl: zod.string().nullable(),
       artist: zod.string(),
       artwork: zod.string(),
+      artworkBlurhash: zod
+        .string()
+        .nullish()
+        .describe(
+          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+        ),
       book: zod.string().nullable(),
       chapter: zod.union([
         zod.int(),
@@ -1470,6 +1590,12 @@ export const PlaylistControllerUpdateResponse = zod.strictObject({
   title: zod.string(),
   description: zod.string(),
   artwork: zod.string(),
+  artworkBlurhash: zod
+    .string()
+    .nullish()
+    .describe(
+      'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+    ),
   sections: zod.array(
     zod.strictObject({
       id: zod.string(),
@@ -1503,6 +1629,12 @@ export const PlaylistControllerUpdateResponse = zod.strictObject({
           title: zod.string(),
           description: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           position: zod.int(),
           sections: zod.array(
             zod.strictObject({
@@ -1520,6 +1652,12 @@ export const PlaylistControllerUpdateResponse = zod.strictObject({
               youtubeUrl: zod.string().nullable(),
               artist: zod.string(),
               artwork: zod.string(),
+              artworkBlurhash: zod
+                .string()
+                .nullish()
+                .describe(
+                  'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                ),
               book: zod.string().nullable(),
               chapter: zod.union([
                 zod.int(),
@@ -1587,6 +1725,12 @@ export const PlaylistControllerUpdateResponse = zod.strictObject({
       youtubeUrl: zod.string().nullable(),
       artist: zod.string(),
       artwork: zod.string(),
+      artworkBlurhash: zod
+        .string()
+        .nullish()
+        .describe(
+          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+        ),
       book: zod.string().nullable(),
       chapter: zod.union([
         zod.int(),
@@ -1822,6 +1966,12 @@ export const SermonControllerCreateResponse = zod.strictObject({
   youtubeUrl: zod.string().nullable(),
   artist: zod.string(),
   artwork: zod.string(),
+  artworkBlurhash: zod
+    .string()
+    .nullish()
+    .describe(
+      'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+    ),
   book: zod.string().nullable(),
   chapter: zod.union([
     zod.int(),
@@ -1860,6 +2010,12 @@ export const SermonControllerCreateResponse = zod.strictObject({
       title: zod.string(),
       description: zod.string(),
       artwork: zod.string(),
+      artworkBlurhash: zod
+        .string()
+        .nullish()
+        .describe(
+          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+        ),
       sections: zod.array(
         zod.strictObject({
           id: zod.string(),
@@ -1893,6 +2049,12 @@ export const SermonControllerCreateResponse = zod.strictObject({
               title: zod.string(),
               description: zod.string(),
               artwork: zod.string(),
+              artworkBlurhash: zod
+                .string()
+                .nullish()
+                .describe(
+                  'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                ),
               position: zod.int(),
               sections: zod.array(
                 zod.strictObject({
@@ -1910,6 +2072,12 @@ export const SermonControllerCreateResponse = zod.strictObject({
                   youtubeUrl: zod.string().nullable(),
                   artist: zod.string(),
                   artwork: zod.string(),
+                  artworkBlurhash: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                    ),
                   book: zod.string().nullable(),
                   chapter: zod.union([
                     zod.int(),
@@ -1977,6 +2145,12 @@ export const SermonControllerCreateResponse = zod.strictObject({
           youtubeUrl: zod.string().nullable(),
           artist: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           book: zod.string().nullable(),
           chapter: zod.union([
             zod.int(),
@@ -2139,6 +2313,12 @@ export const SermonControllerFindAllResponse = zod.strictObject({
       youtubeUrl: zod.string().nullable(),
       artist: zod.string(),
       artwork: zod.string(),
+      artworkBlurhash: zod
+        .string()
+        .nullish()
+        .describe(
+          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+        ),
       book: zod.string().nullable(),
       chapter: zod.union([
         zod.int(),
@@ -2181,6 +2361,12 @@ export const SermonControllerFindAllResponse = zod.strictObject({
           title: zod.string(),
           description: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           sections: zod.array(
             zod.strictObject({
               id: zod.string(),
@@ -2214,6 +2400,12 @@ export const SermonControllerFindAllResponse = zod.strictObject({
                   title: zod.string(),
                   description: zod.string(),
                   artwork: zod.string(),
+                  artworkBlurhash: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                    ),
                   position: zod.int(),
                   sections: zod.array(
                     zod.strictObject({
@@ -2231,6 +2423,12 @@ export const SermonControllerFindAllResponse = zod.strictObject({
                       youtubeUrl: zod.string().nullable(),
                       artist: zod.string(),
                       artwork: zod.string(),
+                      artworkBlurhash: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                        ),
                       book: zod.string().nullable(),
                       chapter: zod.union([
                         zod.int(),
@@ -2298,6 +2496,12 @@ export const SermonControllerFindAllResponse = zod.strictObject({
               youtubeUrl: zod.string().nullable(),
               artist: zod.string(),
               artwork: zod.string(),
+              artworkBlurhash: zod
+                .string()
+                .nullish()
+                .describe(
+                  'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                ),
               book: zod.string().nullable(),
               chapter: zod.union([
                 zod.int(),
@@ -2421,6 +2625,12 @@ export const SermonControllerFindOneResponse = zod.strictObject({
   youtubeUrl: zod.string().nullable(),
   artist: zod.string(),
   artwork: zod.string(),
+  artworkBlurhash: zod
+    .string()
+    .nullish()
+    .describe(
+      'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+    ),
   book: zod.string().nullable(),
   chapter: zod.union([
     zod.int(),
@@ -2459,6 +2669,12 @@ export const SermonControllerFindOneResponse = zod.strictObject({
       title: zod.string(),
       description: zod.string(),
       artwork: zod.string(),
+      artworkBlurhash: zod
+        .string()
+        .nullish()
+        .describe(
+          'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+        ),
       sections: zod.array(
         zod.strictObject({
           id: zod.string(),
@@ -2492,6 +2708,12 @@ export const SermonControllerFindOneResponse = zod.strictObject({
               title: zod.string(),
               description: zod.string(),
               artwork: zod.string(),
+              artworkBlurhash: zod
+                .string()
+                .nullish()
+                .describe(
+                  'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                ),
               position: zod.int(),
               sections: zod.array(
                 zod.strictObject({
@@ -2509,6 +2731,12 @@ export const SermonControllerFindOneResponse = zod.strictObject({
                   youtubeUrl: zod.string().nullable(),
                   artist: zod.string(),
                   artwork: zod.string(),
+                  artworkBlurhash: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+                    ),
                   book: zod.string().nullable(),
                   chapter: zod.union([
                     zod.int(),
@@ -2576,6 +2804,12 @@ export const SermonControllerFindOneResponse = zod.strictObject({
           youtubeUrl: zod.string().nullable(),
           artist: zod.string(),
           artwork: zod.string(),
+          artworkBlurhash: zod
+            .string()
+            .nullish()
+            .describe(
+              'BlurHash обложки — заглушка от бэкенда; null, если хэш ещё не посчитан.',
+            ),
           book: zod.string().nullable(),
           chapter: zod.union([
             zod.int(),
