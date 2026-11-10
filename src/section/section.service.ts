@@ -17,6 +17,8 @@ import {
   NormalizedSection,
 } from './interfacies/interface';
 import { PlaylistService } from 'src/playlist/playlist.service';
+import { artworkBlurhashMap } from 'src/pictures/artwork-blurhash';
+import { PicturesService } from 'src/pictures/pictures.service';
 import { toInternalServerError } from 'src/shared/internal-error';
 import { ReorderSectionsBody } from 'src/generated';
 
@@ -49,12 +51,36 @@ const SECTION_ORDER = {
   },
 } as const;
 
+/**
+ * Every artwork URL a normalized section response can contain: each attached
+ * playlist and each sermon nested inside those playlists. Gathered once per
+ * response so the blurhash lookup is a single batched query.
+ */
+const collectArtworkUrls = (sections: readonly SectionEntity[]): string[] => {
+  const urls: string[] = [];
+  for (const section of sections) {
+    for (const playlistJoin of section.playlistJoins ?? []) {
+      const playlist = playlistJoin.playlist;
+      if (playlist.artwork) {
+        urls.push(playlist.artwork);
+      }
+      for (const sermonJoin of playlist.sermonJoins ?? []) {
+        if (sermonJoin.sermon.artwork) {
+          urls.push(sermonJoin.sermon.artwork);
+        }
+      }
+    }
+  }
+  return urls;
+};
+
 @Injectable()
 export class SectionService {
   private readonly logger = new Logger(SectionService.name);
 
   constructor(
     private playlistService: PlaylistService,
+    private readonly picturesService: PicturesService,
     @InjectRepository(SectionEntity)
     private sectionRepository: Repository<SectionEntity>,
     @InjectDataSource()
@@ -86,7 +112,7 @@ export class SectionService {
             playlistJoins: [],
           });
           const saved = await sectionRepository.save(section);
-          return this.normalizeSection(saved);
+          return this.normalizeSection(saved, new Map());
         },
       );
     } catch (error) {
@@ -118,7 +144,7 @@ export class SectionService {
         order: SECTION_ORDER,
       });
       return {
-        sections: result.map((sec) => this.normalizeSection(sec)),
+        sections: await this.normalizeSections(result),
         count: count,
       };
     } catch (error) {
@@ -139,7 +165,8 @@ export class SectionService {
       if (!section) {
         return null;
       }
-      return this.normalizeSection(section);
+      const blurhashes = await this.artworkBlurhashesForSections([section]);
+      return this.normalizeSection(section, blurhashes);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -204,7 +231,8 @@ export class SectionService {
       if (!reloaded) {
         throw new NotFoundException('Section not found after update');
       }
-      return this.normalizeSection(reloaded);
+      const blurhashes = await this.artworkBlurhashesForSections([reloaded]);
+      return this.normalizeSection(reloaded, blurhashes);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -377,7 +405,28 @@ export class SectionService {
     });
   }
 
-  private normalizeSection(sec: SectionEntity): NormalizedSection {
+  private async artworkBlurhashesForSections(
+    sections: readonly SectionEntity[],
+  ): Promise<Map<string, string | null>> {
+    return artworkBlurhashMap(
+      this.picturesService,
+      collectArtworkUrls(sections),
+    );
+  }
+
+  private async normalizeSections(
+    sections: SectionEntity[],
+  ): Promise<NormalizedSection[]> {
+    const blurhashes = await this.artworkBlurhashesForSections(sections);
+    return sections.map((section) =>
+      this.normalizeSection(section, blurhashes),
+    );
+  }
+
+  private normalizeSection(
+    sec: SectionEntity,
+    blurhashes: Map<string, string | null>,
+  ): NormalizedSection {
     const playlistJoins = sec.playlistJoins ?? [];
     return {
       id: sec.id,
@@ -391,13 +440,14 @@ export class SectionService {
       whereIsSlideTitleLocated: sec.whereIsSlideTitleLocated,
       borderRadius: sec.borderRadius,
       playlists: playlistJoins.map((join) =>
-        this.normalizeSectionPlaylist(join),
+        this.normalizeSectionPlaylist(join, blurhashes),
       ),
     };
   }
 
   private normalizeSectionPlaylist(
     join: SectionPlaylistJoinEntity,
+    blurhashes: Map<string, string | null>,
   ): NormalizedPlaylist {
     const playlist = join.playlist;
     const sectionJoins = playlist.sectionJoins ?? [];
@@ -407,6 +457,7 @@ export class SectionService {
       title: playlist.title,
       description: playlist.description,
       artwork: playlist.artwork,
+      artworkBlurhash: blurhashes.get(playlist.artwork) ?? null,
       position: join.position,
       sections: sectionJoins.map((sectionJoin) => ({
         id: sectionJoin.section.id,
@@ -421,6 +472,7 @@ export class SectionService {
         youtubeUrl: sermonJoin.sermon.youtubeUrl,
         artist: sermonJoin.sermon.artist,
         artwork: sermonJoin.sermon.artwork,
+        artworkBlurhash: blurhashes.get(sermonJoin.sermon.artwork) ?? null,
         book: sermonJoin.sermon.book,
         chapter: sermonJoin.sermon.chapter,
         verse: sermonJoin.sermon.verse,

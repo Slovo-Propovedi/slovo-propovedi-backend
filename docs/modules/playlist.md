@@ -28,6 +28,7 @@
 |------|---------|-----|------------|
 | `id` | `id` | uuid | PK |
 | `title` / `description` / `artwork` | — | varchar | NOT NULL |
+| `artworkBlurhash` | — (вычисляемое) | string \| null (в ответе) | BlurHash обложки рядом с `artwork`; не колонка БД — нормализатор берёт значение из `picture` и ставит `null`, пока хэш не посчитан (считается при загрузке через `PicturesService`) |
 | `createdAt` | `created_at` | timestamptz | NOT NULL, default `now()` — дата добавления; ключ `sort=date`; сериализуется в ответ |
 | `sectionJoins` | relation | — | `@OneToMany → SectionPlaylistJoinEntity`, cascade |
 | `sermonJoins` | relation | — | `@OneToMany → PlaylistSermonJoinEntity`, cascade |

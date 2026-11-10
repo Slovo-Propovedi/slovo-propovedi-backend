@@ -15,6 +15,7 @@ import { PlaylistSermonJoinEntity } from './entities/playlist-sermon-join.entity
 import { SectionEntity } from 'src/section/entities/section.entity';
 import { SectionPlaylistJoinEntity } from 'src/section/entities/section-playlist-join.entity';
 import { SermonService } from 'src/sermon/sermon.service';
+import { PicturesService } from 'src/pictures/pictures.service';
 
 // Mirror of the service's canonical tsvector expression — asserting the exact
 // string guards the runtime behavior against accidental edits to
@@ -61,6 +62,7 @@ describe('PlaylistService', () => {
     findOne: jest.Mock;
   };
   let dataSource: { transaction: jest.Mock };
+  let picturesService: { findBlurhashes: jest.Mock };
 
   beforeEach(async () => {
     playlistRepository = {
@@ -72,6 +74,9 @@ describe('PlaylistService', () => {
       findOne: jest.fn(),
     };
     dataSource = { transaction: jest.fn() };
+    picturesService = {
+      findBlurhashes: jest.fn().mockResolvedValue(new Map()),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -79,6 +84,10 @@ describe('PlaylistService', () => {
         {
           provide: SermonService,
           useValue: {},
+        },
+        {
+          provide: PicturesService,
+          useValue: picturesService,
         },
         {
           provide: getRepositoryToken(PlaylistEntity),

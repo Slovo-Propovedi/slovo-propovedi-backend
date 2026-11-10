@@ -10,6 +10,11 @@ import { PlaylistSermonJoinEntity } from './entities/playlist-sermon-join.entity
 import { SectionEntity } from 'src/section/entities/section.entity';
 import { SectionPlaylistJoinEntity } from 'src/section/entities/section-playlist-join.entity';
 import { SermonService } from 'src/sermon/sermon.service';
+import { PicturesService } from 'src/pictures/pictures.service';
+
+const ARTWORK_PLAYLIST = 'https://minio.example.com/files/artwork-p.jpg';
+const ARTWORK_SERMON_1 = 'https://minio.example.com/files/artwork-1.jpg';
+const ARTWORK_SERMON_2 = 'https://minio.example.com/files/artwork-2.jpg';
 
 // Serializer-level guard: drive the REAL service normalizer and parse through
 // the GENERATED response schema. The service unit tests bypass
@@ -46,7 +51,7 @@ const sermonEntity = {
   audioUrl: null,
   youtubeUrl: null,
   artist: 'Автор',
-  artwork: 'artwork-1',
+  artwork: ARTWORK_SERMON_1,
   book: null,
   chapter: null,
   verse: null,
@@ -58,6 +63,7 @@ const nestedSermonEntity = {
   ...sermonEntity,
   id: 'sermon-2',
   title: 'Вложенная проповедь',
+  artwork: ARTWORK_SERMON_2,
   createdAt: NESTED_SERMON_CREATED,
 } as SermonEntity;
 
@@ -65,7 +71,7 @@ const hydratedPlaylist = {
   id: 'playlist-1',
   title: 'Плейлист',
   description: 'Описание плейлиста',
-  artwork: 'artwork-p',
+  artwork: ARTWORK_PLAYLIST,
   createdAt: PLAYLIST_CREATED,
   sectionJoins: [
     {
@@ -101,6 +107,7 @@ describe('PlaylistService serializer compatibility (generated schemas)', () => {
     findOne: jest.Mock;
   };
   let dataSource: { transaction: jest.Mock };
+  let picturesService: { findBlurhashes: jest.Mock };
 
   beforeEach(async () => {
     playlistRepository = {
@@ -108,11 +115,13 @@ describe('PlaylistService serializer compatibility (generated schemas)', () => {
       findOne: jest.fn(),
     };
     dataSource = { transaction: jest.fn() };
+    picturesService = { findBlurhashes: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PlaylistService,
         { provide: SermonService, useValue: {} },
+        { provide: PicturesService, useValue: picturesService },
         {
           provide: getRepositoryToken(PlaylistEntity),
           useValue: playlistRepository,
@@ -134,6 +143,13 @@ describe('PlaylistService serializer compatibility (generated schemas)', () => {
   });
 
   it('GET /playlists response satisfies the generated strict schema, including nested createdAt', async () => {
+    picturesService.findBlurhashes.mockResolvedValue(
+      new Map([
+        ['artwork-p.jpg', 'hash-p'],
+        ['artwork-1.jpg', 'hash-1'],
+        ['artwork-2.jpg', 'hash-2'],
+      ]),
+    );
     playlistRepository.findAndCount.mockResolvedValue([[hydratedPlaylist], 1]);
 
     const result = await service.findAll();
@@ -142,9 +158,15 @@ describe('PlaylistService serializer compatibility (generated schemas)', () => {
     expect(parsed.playlists[0].createdAt).toBe(PLAYLIST_CREATED.toISOString());
     expect(parsed.playlists[0].sections[0].title).toBe(section.title);
     expect(parsed.playlists[0].sermons).toHaveLength(2);
+    expect(parsed.playlists[0].artworkBlurhash).toBe('hash-p');
+    expect(parsed.playlists[0].sermons[0].artworkBlurhash).toBe('hash-1');
+    expect(parsed.playlists[0].sermons[1].artworkBlurhash).toBe('hash-2');
   });
 
   it('POST /playlists response satisfies the generated strict schema, including nested createdAt', async () => {
+    picturesService.findBlurhashes.mockResolvedValue(
+      new Map([['artwork-p.jpg', 'hash-p']]),
+    );
     const saved = { ...hydratedPlaylist };
     const manager = {
       getRepository: jest.fn().mockImplementation((entity) => {
@@ -175,5 +197,8 @@ describe('PlaylistService serializer compatibility (generated schemas)', () => {
     expect(parsed.createdAt).toBe(PLAYLIST_CREATED.toISOString());
     expect(parsed.sections[0].title).toBe(section.title);
     expect(parsed.sermons).toHaveLength(2);
+    expect(parsed.artworkBlurhash).toBe('hash-p');
+    expect(parsed.sermons[0].artworkBlurhash).toBeNull();
+    expect(parsed.sermons[1].artworkBlurhash).toBeNull();
   });
 });

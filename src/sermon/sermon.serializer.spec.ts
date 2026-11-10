@@ -11,6 +11,11 @@ import { PlaylistSermonJoinEntity } from 'src/playlist/entities/playlist-sermon-
 import { SectionEntity } from 'src/section/entities/section.entity';
 import { SectionPlaylistJoinEntity } from 'src/section/entities/section-playlist-join.entity';
 import { MinioService } from 'src/minio/minio.service';
+import { PicturesService } from 'src/pictures/pictures.service';
+
+const ARTWORK_1 = 'https://minio.example.com/files/artwork-1.jpg';
+const ARTWORK_2 = 'https://minio.example.com/files/artwork-2.jpg';
+const ARTWORK_PLAYLIST = 'https://minio.example.com/files/artwork-p.jpg';
 
 // These tests drive the REAL service normalizers and then parse the result
 // through the GENERATED response schemas. Unit tests on the service specs
@@ -43,7 +48,7 @@ const nestedSermon = {
   audioUrl: null,
   youtubeUrl: null,
   artist: 'Автор',
-  artwork: 'artwork-2',
+  artwork: ARTWORK_2,
   book: null,
   chapter: null,
   verse: null,
@@ -58,7 +63,7 @@ const pageSermon = {
   audioUrl: 'https://minio.example.com/files/audio.mp3',
   youtubeUrl: null,
   artist: 'Автор',
-  artwork: 'artwork-1',
+  artwork: ARTWORK_1,
   book: null,
   chapter: null,
   verse: null,
@@ -69,7 +74,7 @@ const playlist = {
   id: 'playlist-1',
   title: 'Плейлист',
   description: 'Описание плейлиста',
-  artwork: 'artwork-p',
+  artwork: ARTWORK_PLAYLIST,
   createdAt: PLAYLIST_CREATED,
 } as PlaylistEntity;
 
@@ -169,6 +174,7 @@ describe('SermonService serializer compatibility (generated schemas)', () => {
   let playlistSermonJoinRepository: { createQueryBuilder: jest.Mock };
   let sectionPlaylistJoinRepository: { createQueryBuilder: jest.Mock };
   let sectionRepository: { find: jest.Mock };
+  let picturesService: { findBlurhashes: jest.Mock };
 
   beforeEach(async () => {
     sermonRepository = {
@@ -182,6 +188,7 @@ describe('SermonService serializer compatibility (generated schemas)', () => {
     playlistSermonJoinRepository = { createQueryBuilder: jest.fn() };
     sectionPlaylistJoinRepository = { createQueryBuilder: jest.fn() };
     sectionRepository = { find: jest.fn() };
+    picturesService = { findBlurhashes: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -207,6 +214,7 @@ describe('SermonService serializer compatibility (generated schemas)', () => {
           useValue: sectionPlaylistJoinRepository,
         },
         { provide: MinioService, useValue: { removeObjectByUrl: jest.fn() } },
+        { provide: PicturesService, useValue: picturesService },
         { provide: getDataSourceToken(), useValue: {} },
       ],
     }).compile();
@@ -215,6 +223,12 @@ describe('SermonService serializer compatibility (generated schemas)', () => {
   });
 
   it('GET /sermons response satisfies the generated strict schema, including nested createdAt', async () => {
+    picturesService.findBlurhashes.mockResolvedValue(
+      new Map([
+        ['artwork-1.jpg', 'hash-1'],
+        ['artwork-p.jpg', 'hash-p'],
+      ]),
+    );
     const pageBuilder = mockBuilder({ getMany: [pageSermon], getCount: 1 });
     sermonRepository.createQueryBuilder.mockReturnValue(pageBuilder);
 
@@ -268,9 +282,24 @@ describe('SermonService serializer compatibility (generated schemas)', () => {
     expect(parsed.sermons[0].playlists[0].sections[0].title).toBe(
       section.title,
     );
+    expect(parsed.sermons[0].artworkBlurhash).toBe('hash-1');
+    expect(parsed.sermons[0].playlists[0].artworkBlurhash).toBe('hash-p');
+    expect(parsed.sermons[0].playlists[0].sermons[0].artworkBlurhash).toBe(
+      'hash-1',
+    );
+    expect(
+      parsed.sermons[0].playlists[0].sermons[1].artworkBlurhash,
+    ).toBeNull();
   });
 
   it('POST /sermons response satisfies the generated strict schema, including nested createdAt', async () => {
+    picturesService.findBlurhashes.mockResolvedValue(
+      new Map([
+        ['artwork-1.jpg', 'hash-1'],
+        ['artwork-2.jpg', 'hash-2'],
+        ['artwork-p.jpg', 'hash-p'],
+      ]),
+    );
     sermonRepository.create.mockReturnValue({ id: pageSermon.id });
     sermonRepository.save.mockResolvedValue({ id: pageSermon.id });
     sermonRepository.findOne.mockResolvedValue(hydratedSermon);
@@ -287,5 +316,9 @@ describe('SermonService serializer compatibility (generated schemas)', () => {
     expect(parsed.playlists[0].createdAt).toBe(PLAYLIST_CREATED.toISOString());
     expect(parsed.playlists[0].sections[0].title).toBe(section.title);
     expect(parsed.playlists[0].sermons).toHaveLength(2);
+    expect(parsed.artworkBlurhash).toBe('hash-1');
+    expect(parsed.playlists[0].artworkBlurhash).toBe('hash-p');
+    expect(parsed.playlists[0].sermons[0].artworkBlurhash).toBe('hash-1');
+    expect(parsed.playlists[0].sermons[1].artworkBlurhash).toBe('hash-2');
   });
 });

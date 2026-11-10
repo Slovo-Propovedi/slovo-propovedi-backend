@@ -130,6 +130,8 @@
 
 > **Превью обложек (соглашение, вне OpenAPI):** для `artwork` вида `${MINIO_PUBLIC_URI}/files/<uuid>.<ext>` существует `${MINIO_PUBLIC_URI}/files/thumbs/<uuid>.webp` (WebP ≤ 640 px). Клиенты используют его для карточек и откатываются на оригинал, если превью нет — см. [minio.md](../modules/minio.md#превью-изображений-thumbs).
 
+> ✅ `artworkBlurhash`: рядом с `artwork` в ответах sermons/playlists/sections (включая вложенные плейлисты и проповеди) отдаётся nullable BlurHash обложки — строка или `null`, пока хэш не посчитан (считается при загрузке через `PicturesService`). `GET /files` не менялся. Поле добавлено контрактом OpenAPI **0.23.5**.
+
 | Эндпоинт | Guard | Метод контроллера | Метод сервиса |
 |----------|-------|-------------------|----------------|
 | `POST /files` | `AuthGuard` + `RolesGuard` (admin, moderator) | `AppController.uploadFile` (лимит 100 MB, `fileFilter` по `MEDIA_EXTENSIONS`) | `MinioService.uploadFile` |

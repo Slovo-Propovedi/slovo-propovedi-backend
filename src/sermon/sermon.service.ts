@@ -24,6 +24,8 @@ import {
   UpdateSermon,
 } from './interfaces/interface';
 import { MinioService, ReferencedFileNames } from 'src/minio/minio.service';
+import { artworkBlurhashMap } from 'src/pictures/artwork-blurhash';
+import { PicturesService } from 'src/pictures/pictures.service';
 import {
   collectReferencedFileNames,
   isReferencedAnywhere,
@@ -65,6 +67,32 @@ const SERMON_RELATION_ORDER = {
     },
   },
 } as const;
+
+/**
+ * Every artwork URL a normalized sermon response can contain: the root sermon,
+ * each of its playlists and each sermon nested inside those playlists. Gathered
+ * once per response so the blurhash lookup is a single batched query.
+ */
+const collectArtworkUrls = (sermons: readonly SermonEntity[]): string[] => {
+  const urls: string[] = [];
+  for (const sermon of sermons) {
+    if (sermon.artwork) {
+      urls.push(sermon.artwork);
+    }
+    for (const playlistJoin of sermon.playlistJoins ?? []) {
+      const playlist = playlistJoin.playlist;
+      if (playlist.artwork) {
+        urls.push(playlist.artwork);
+      }
+      for (const sermonJoin of playlist.sermonJoins ?? []) {
+        if (sermonJoin.sermon.artwork) {
+          urls.push(sermonJoin.sermon.artwork);
+        }
+      }
+    }
+  }
+  return urls;
+};
 
 // ---------------------------------------------------------------------------
 // Full-text search: boundary parsing + single source of truth for the weights
@@ -228,6 +256,7 @@ export class SermonService {
     @InjectRepository(SectionPlaylistJoinEntity)
     private sectionPlaylistJoinRepository: Repository<SectionPlaylistJoinEntity>,
     private readonly minioService: MinioService,
+    private readonly picturesService: PicturesService,
     @InjectDataSource()
     private dataSource: DataSource,
   ) {}
@@ -376,7 +405,7 @@ export class SermonService {
         const count = await this.countSermons(tsquery);
         const graph = await this.assembleSermonGraph(sermons);
         return {
-          sermons: graph.map((s) => this.normalizeSermonRelations(s)),
+          sermons: await this.normalizeSermonGraph(graph),
           count,
           nextCursor: null,
         };
@@ -390,7 +419,7 @@ export class SermonService {
         const count = await this.countSermons(tsquery);
         const graph = await this.assembleSermonGraph(sermons);
         return {
-          sermons: graph.map((s) => this.normalizeSermonRelations(s)),
+          sermons: await this.normalizeSermonGraph(graph),
           count,
           nextCursor: null,
         };
@@ -464,7 +493,7 @@ export class SermonService {
 
       const graph = await this.assembleSermonGraph(sermons);
       return {
-        sermons: graph.map((s) => this.normalizeSermonRelations(s)),
+        sermons: await this.normalizeSermonGraph(graph),
         count: null,
         nextCursor,
       };
@@ -565,7 +594,7 @@ export class SermonService {
 
     const graph = await this.assembleSermonGraph(orderedSermons);
     return {
-      sermons: graph.map((s) => this.normalizeSermonRelations(s)),
+      sermons: await this.normalizeSermonGraph(graph),
       count,
       nextCursor: null,
     };
@@ -844,7 +873,11 @@ export class SermonService {
         relations: SERMON_RELATIONS,
         order: SERMON_RELATION_ORDER,
       });
-      return sermon ? this.normalizeSermonRelations(sermon) : null;
+      if (!sermon) {
+        return null;
+      }
+      const blurhashes = await this.artworkBlurhashesForSermons([sermon]);
+      return this.normalizeSermonRelations(sermon, blurhashes);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -1046,8 +1079,27 @@ export class SermonService {
     }
   }
 
+  private async artworkBlurhashesForSermons(
+    sermons: readonly SermonEntity[],
+  ): Promise<Map<string, string | null>> {
+    return artworkBlurhashMap(
+      this.picturesService,
+      collectArtworkUrls(sermons),
+    );
+  }
+
+  private async normalizeSermonGraph(
+    sermons: SermonEntity[],
+  ): Promise<NormalizedSermonResponse[]> {
+    const blurhashes = await this.artworkBlurhashesForSermons(sermons);
+    return sermons.map((sermon) =>
+      this.normalizeSermonRelations(sermon, blurhashes),
+    );
+  }
+
   private normalizeSermonRelations(
     sermon: SermonEntity,
+    blurhashes: Map<string, string | null>,
   ): NormalizedSermonResponse {
     return {
       id: sermon.id,
@@ -1058,11 +1110,12 @@ export class SermonService {
       youtubeUrl: sermon.youtubeUrl,
       artist: sermon.artist,
       artwork: sermon.artwork,
+      artworkBlurhash: blurhashes.get(sermon.artwork) ?? null,
       book: sermon.book,
       chapter: sermon.chapter,
       verse: sermon.verse,
       playlists: (sermon.playlistJoins ?? []).map((join) =>
-        this.normalizePlaylistRelations(join.playlist),
+        this.normalizePlaylistRelations(join.playlist, blurhashes),
       ),
       createdAt: sermon.createdAt.toISOString(),
     };
@@ -1070,6 +1123,7 @@ export class SermonService {
 
   private normalizePlaylistRelations(
     playlist: PlaylistEntity,
+    blurhashes: Map<string, string | null>,
   ): NormalizedSermonResponse['playlists'][number] {
     const sectionJoins = playlist.sectionJoins ?? [];
     const sermonJoins = playlist.sermonJoins ?? [];
@@ -1078,6 +1132,7 @@ export class SermonService {
       title: playlist.title,
       description: playlist.description,
       artwork: playlist.artwork,
+      artworkBlurhash: blurhashes.get(playlist.artwork) ?? null,
       sections: sectionJoins.map((sectionJoin) => ({
         id: sectionJoin.section.id,
         title: sectionJoin.section.title,
@@ -1101,6 +1156,7 @@ export class SermonService {
         youtubeUrl: sermonJoin.sermon.youtubeUrl,
         artist: sermonJoin.sermon.artist,
         artwork: sermonJoin.sermon.artwork,
+        artworkBlurhash: blurhashes.get(sermonJoin.sermon.artwork) ?? null,
         book: sermonJoin.sermon.book,
         chapter: sermonJoin.sermon.chapter,
         verse: sermonJoin.sermon.verse,

@@ -48,6 +48,7 @@
 | `whereIsSlideTitleLocated` | `where-is-slide-title-located` | varchar | default `'under'` |
 | `borderRadius` | `border-radius` | boolean | default false |
 | `playlistJoins` | relation | — | `@OneToMany → SectionPlaylistJoinEntity`, cascade |
+| `artworkBlurhash` | — (вычисляемое) | string \| null (в ответе) | BlurHash обложки у вложенных плейлистов и проповедей рядом с `artwork`; не колонка БД — нормализатор берёт значение из `picture` и ставит `null`, пока хэш не посчитан |
 
 ### `SectionPlaylistJoinEntity` — таблица `section_playlists_playlist`
 

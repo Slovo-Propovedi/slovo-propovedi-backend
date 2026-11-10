@@ -8,6 +8,7 @@ import { PlaylistSermonJoinEntity } from 'src/playlist/entities/playlist-sermon-
 import { SectionEntity } from 'src/section/entities/section.entity';
 import { SectionPlaylistJoinEntity } from 'src/section/entities/section-playlist-join.entity';
 import { MinioModule } from 'src/minio/minio.module';
+import { PicturesModule } from 'src/pictures/pictures.module';
 import { UsersModule } from 'src/users/users.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { UsersModule } from 'src/users/users.module';
       SectionPlaylistJoinEntity,
     ]),
     MinioModule,
+    PicturesModule,
     // AuthGuard re-checks the live user (role/token_version) on every request.
     UsersModule,
   ],

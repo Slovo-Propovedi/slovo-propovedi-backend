@@ -20,6 +20,8 @@ import {
   StatusPlaylistResponse,
 } from './interfaces/interface';
 import { buildSearchTsQuery, SermonService } from 'src/sermon/sermon.service';
+import { artworkBlurhashMap } from 'src/pictures/artwork-blurhash';
+import { PicturesService } from 'src/pictures/pictures.service';
 import { DEFAULT_PAGE_LIMIT } from 'src/shared/pagination';
 import { SortOrder } from 'src/shared/sort';
 import { toInternalServerError } from 'src/shared/internal-error';
@@ -46,6 +48,26 @@ const PLAYLIST_ORDER = {
   sermonJoins: { position: 'ASC' },
   sectionJoins: { position: 'ASC' },
 } as const;
+
+/**
+ * Every artwork URL a normalized playlist response can contain: the playlist
+ * itself and each sermon nested inside it. Gathered once per response so the
+ * blurhash lookup is a single batched query.
+ */
+const collectArtworkUrls = (playlists: readonly PlaylistEntity[]): string[] => {
+  const urls: string[] = [];
+  for (const playlist of playlists) {
+    if (playlist.artwork) {
+      urls.push(playlist.artwork);
+    }
+    for (const sermonJoin of playlist.sermonJoins ?? []) {
+      if (sermonJoin.sermon.artwork) {
+        urls.push(sermonJoin.sermon.artwork);
+      }
+    }
+  }
+  return urls;
+};
 
 // ---------------------------------------------------------------------------
 // Full-text search: boundary parsing + single source of truth for the weights
@@ -117,6 +139,7 @@ export class PlaylistService {
     private sectionRepository: Repository<SectionEntity>,
     @InjectRepository(SectionPlaylistJoinEntity)
     private sectionPlaylistJoinRepository: Repository<SectionPlaylistJoinEntity>,
+    private readonly picturesService: PicturesService,
     @InjectDataSource()
     private dataSource: DataSource,
   ) {}
@@ -241,7 +264,7 @@ export class PlaylistService {
             },
           );
           return {
-            playlists: playlists.map((p) => this.normalizePlaylist(p)),
+            playlists: await this.normalizePlaylists(playlists),
             count,
           };
         }
@@ -251,7 +274,7 @@ export class PlaylistService {
         );
         const [playlists, count] = await queryBuilder.getManyAndCount();
         return {
-          playlists: playlists.map((p) => this.normalizePlaylist(p)),
+          playlists: await this.normalizePlaylists(playlists),
           count,
         };
       }
@@ -270,7 +293,7 @@ export class PlaylistService {
         .setParameter('tsquery', tsquery);
       const [playlists, count] = await queryBuilder.getManyAndCount();
       return {
-        playlists: playlists.map((p) => this.normalizePlaylist(p)),
+        playlists: await this.normalizePlaylists(playlists),
         count,
       };
     } catch (error) {
@@ -398,7 +421,7 @@ export class PlaylistService {
     });
 
     return {
-      playlists: orderedPlaylists.map((p) => this.normalizePlaylist(p)),
+      playlists: await this.normalizePlaylists(orderedPlaylists),
       count,
     };
   }
@@ -481,7 +504,11 @@ export class PlaylistService {
         relations: PLAYLIST_RELATIONS,
         order: PLAYLIST_ORDER,
       });
-      return playlist ? this.normalizePlaylist(playlist) : null;
+      if (!playlist) {
+        return null;
+      }
+      const blurhashes = await this.artworkBlurhashesForPlaylists([playlist]);
+      return this.normalizePlaylist(playlist, blurhashes);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -535,7 +562,9 @@ export class PlaylistService {
         relations: PLAYLIST_RELATIONS,
         order: PLAYLIST_ORDER,
       });
-      return this.normalizePlaylist(saved ?? playlist);
+      const normalized = saved ?? playlist;
+      const blurhashes = await this.artworkBlurhashesForPlaylists([normalized]);
+      return this.normalizePlaylist(normalized, blurhashes);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -712,7 +741,28 @@ export class PlaylistService {
     await this.attachPlaylistToSections(playlist, sectionIdsToAdd);
   }
 
-  private normalizePlaylist(p: PlaylistEntity): NormalizedPlaylistResponse {
+  private async artworkBlurhashesForPlaylists(
+    playlists: readonly PlaylistEntity[],
+  ): Promise<Map<string, string | null>> {
+    return artworkBlurhashMap(
+      this.picturesService,
+      collectArtworkUrls(playlists),
+    );
+  }
+
+  private async normalizePlaylists(
+    playlists: PlaylistEntity[],
+  ): Promise<NormalizedPlaylistResponse[]> {
+    const blurhashes = await this.artworkBlurhashesForPlaylists(playlists);
+    return playlists.map((playlist) =>
+      this.normalizePlaylist(playlist, blurhashes),
+    );
+  }
+
+  private normalizePlaylist(
+    p: PlaylistEntity,
+    blurhashes: Map<string, string | null>,
+  ): NormalizedPlaylistResponse {
     const sermonJoins = p.sermonJoins ?? [];
     const sectionJoins = p.sectionJoins ?? [];
     return {
@@ -720,6 +770,7 @@ export class PlaylistService {
       title: p.title,
       description: p.description,
       artwork: p.artwork,
+      artworkBlurhash: blurhashes.get(p.artwork) ?? null,
       sections: sectionJoins.map((sectionJoin) => ({
         id: sectionJoin.section.id,
         title: sectionJoin.section.title,
@@ -743,6 +794,7 @@ export class PlaylistService {
         youtubeUrl: sermonJoin.sermon.youtubeUrl,
         artist: sermonJoin.sermon.artist,
         artwork: sermonJoin.sermon.artwork,
+        artworkBlurhash: blurhashes.get(sermonJoin.sermon.artwork) ?? null,
         book: sermonJoin.sermon.book,
         chapter: sermonJoin.sermon.chapter,
         verse: sermonJoin.sermon.verse,

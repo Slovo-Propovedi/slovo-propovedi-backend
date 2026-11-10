@@ -1,6 +1,6 @@
 # Модуль `pictures` — BlurHash обложек
 
-Хранит BlurHash-плейсхолдеры загруженных изображений: компактную строку, которую клиент показывает, пока грузится оригинал обложки. Значение считается при загрузке картинки через `POST /files` и лежит в таблице `picture`; наружу через HTTP не отдаётся.
+Хранит BlurHash-плейсхолдеры загруженных изображений: компактную строку, которую клиент показывает, пока грузится оригинал обложки. Значение считается при загрузке картинки через `POST /files` и лежит в таблице `picture`; в каталоговых ответах оно едет рядом с `artwork` в поле `artworkBlurhash` (у `GET /files` контракт не менялся).
 
 **Слой:** backend (module `pictures`)
 **Статус:** актуально
@@ -10,19 +10,20 @@
 - Для каждого загруженного изображения (`.jpeg/.jpg/.png/.webp`) считается BlurHash и сохраняется вместе с именем объекта в бакете `files`.
 - Строка дешёвая (несколько десятков байт), поэтому клиент может отдавать её до загрузки самой обложки и показывать размытую заглушку без отдельного запроса.
 - Существующие картинки дозаполняются скриптом `npm run backfill-blurhash` (см. ниже).
-- REST-контракт **не менялся**: blurhash не возвращается в ответах `POST /files`/`GET /files`, `FileResponseDto` остался прежним.
+- REST-контракт `GET /files`/`POST /files` **не менялся**: `FileResponseDto` остался прежним, blurhash в ответах файловых эндпоинтов не появляется.
 
 ## Устройство
 
 ```
 src/pictures/
 ├── pictures.module.ts             # TypeOrmModule.forFeature([PictureEntity]) + PicturesService (exported)
-├── pictures.service.ts            # record / recordForUpload
+├── pictures.service.ts            # record / recordForUpload / findBlurhashes
+├── artwork-blurhash.ts            # artworkBlurhashMap(picturesService, urls) — url → blurhash | null
 ├── blurhash.ts                    # encodeBlurhash / computeBlurhash
 └── entities/picture.entity.ts     # PictureEntity (таблица picture)
 ```
 
-`PicturesModule` подключается в `AppModule`; `PicturesService` экспортируется и внедряется в `AppController` (загрузка файлов).
+`PicturesModule` подключается в `AppModule`; `PicturesService` экспортируется и внедряется в `AppController` (загрузка файлов), а также в `SermonService`, `PlaylistService` и `SectionService` (обогащение ответов).
 
 ### `PictureEntity` — таблица `picture`
 
@@ -42,6 +43,7 @@ src/pictures/
 |-------|------------|
 | `record(picturePath, blurhash)` | upsert по `"picture-path"`: `findOne` → `save` (обновить `blurhash`) либо `insert` (новая строка). Без TypeORM-опций upsert, чтобы не зависеть от диалекта. |
 | `recordForUpload(picturePath, image)` | best-effort: `computeBlurhash(image)` → `record(...)`. Любая ошибка вычисления или записи логируется (`Blurhash for <file> failed: ...`) и **не валит загрузку** — обложка остаётся рабочей, отсутствует только заглушка. |
+| `findBlurhashes(picturePaths)` | один батч-запрос `find` по `picture-path IN (...)` с `select { picturePath, blurhash }`; возвращает `Map<picturePath, string \| null>`. Пустой вход сразу даёт пустой `Map` без запроса; отсутствующие пути в `Map` не попадают — вызывающий делает `?? null`. |
 
 `AppController.uploadFile` вызывает `recordForUpload` только для изображений (`MinioService.isImageFile(fileName)`), уже после сохранения объекта в MinIO. Ошибка не меняет ответ `POST /files`.
 
@@ -74,10 +76,20 @@ encode(new Uint8ClampedArray(data), info.width, info.height, 4, 3);
 
 Схема таблицы создаётся миграцией [`sql/migrations/016_add_picture.sql`](../../sql/migrations/016_add_picture.sql) (идемпотентна) и продублирована в `sql/bootstrap.sql` для свежих БД.
 
+## BlurHash в ответах каталога
+
+`artwork-blurhash.ts` собирает `Map<artwork URL, blurhash | null>` для нормализаторов ответов:
+
+1. дедуплицирует URL обложек, собранные со всего графа ответа (корневая сущность + вложенные плейлисты/проповеди);
+2. достаёт имя объекта через `MinioService.extractFileNameFromUrl` в `try/catch` — непарсящийся или чужой bucket URL молча пропускается (политика [`referenced-files.ts`](../../src/minio/referenced-files.ts): одна битая legacy-строка не должна ломать каталог);
+3. делает **один** вызов `findBlurhashes` и возвращает `Map`, ключ — исходный URL, значение — строка BlurHash или `null`.
+
+`SermonService` (`findAll`/`findOne`), `PlaylistService` (`findAll`/`findOne`/`update`) и `SectionService` (`findAll`/`findOne`/`update`) вызывают адаптер один раз на ответ и передают `Map` в нормализаторы. Поле `artworkBlurhash` (`string | null`) добавляется в каждом месте ответа, где есть `artwork`: корневая проповедь/плейлист, плейлист внутри проповеди, проповедь внутри плейлиста/раздела. `null` означает «хэш ещё не посчитан», а не отсутствие обложки; `create` раздела не делает лишнего запроса (пустой `Map`).
+
 ## Чего нет (пока)
 
 - Нет HTTP-эндпоинтов модуля: `pictures` — внутренний сервис, наружу торчит только `POST /files`.
-- BlurHash не возвращается в ответах API — `FileResponseDto`, сгенерированные zod-схемы и фронтенд-DTO не менялись.
+- `GET /files` не менялся: blurhash отдаётся только рядом с `artwork` в ответах sermons/playlists/sections, не в файловых DTO.
 - Нет удаления строк `picture` при удалении изображения (имена объектов неизменяемы, строки переживают удаление файла; отдельной очистки пока нет).
 
 ## Связанные документы

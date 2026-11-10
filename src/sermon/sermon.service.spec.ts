@@ -21,6 +21,7 @@ import { PlaylistSermonJoinEntity } from 'src/playlist/entities/playlist-sermon-
 import { SectionEntity } from 'src/section/entities/section.entity';
 import { SectionPlaylistJoinEntity } from 'src/section/entities/section-playlist-join.entity';
 import { MinioService } from 'src/minio/minio.service';
+import { PicturesService } from 'src/pictures/pictures.service';
 
 // Mirror of the service's canonical tsvector expression — asserting the exact
 // string guards the runtime behavior against accidental edits to SEARCH_WEIGHTS
@@ -248,6 +249,7 @@ describe('SermonService', () => {
   let sectionPlaylistJoinRepository: { createQueryBuilder: jest.Mock };
   let sectionRepository: { find: jest.Mock };
   let minioService: { removeObjectByName: jest.Mock };
+  let picturesService: { findBlurhashes: jest.Mock };
 
   beforeEach(async () => {
     sermonRepository = {
@@ -264,6 +266,9 @@ describe('SermonService', () => {
     sectionPlaylistJoinRepository = { createQueryBuilder: jest.fn() };
     sectionRepository = { find: jest.fn() };
     minioService = { removeObjectByName: jest.fn() };
+    picturesService = {
+      findBlurhashes: jest.fn().mockResolvedValue(new Map()),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -291,6 +296,10 @@ describe('SermonService', () => {
         {
           provide: MinioService,
           useValue: minioService,
+        },
+        {
+          provide: PicturesService,
+          useValue: picturesService,
         },
         {
           provide: getDataSourceToken(),
@@ -1584,6 +1593,7 @@ describe('SermonService', () => {
         youtubeUrl: sermon.youtubeUrl,
         artist: sermon.artist,
         artwork: sermon.artwork,
+        artworkBlurhash: null,
         book: sermon.book,
         chapter: sermon.chapter,
         verse: sermon.verse,
@@ -1603,6 +1613,7 @@ describe('SermonService', () => {
         title: playlist.title,
         description: playlist.description,
         artwork: playlist.artwork,
+        artworkBlurhash: null,
         sections: SEED_SECTION_PLAYLIST_JOINS.filter(
           (join) => join.playlistId === playlistId,
         )
@@ -1628,6 +1639,7 @@ describe('SermonService', () => {
         youtubeUrl: sermon.youtubeUrl,
         artist: sermon.artist,
         artwork: sermon.artwork,
+        artworkBlurhash: null,
         book: sermon.book,
         chapter: sermon.chapter,
         verse: sermon.verse,
@@ -1767,6 +1779,7 @@ describe('SermonService', () => {
         count: 5,
         nextCursor: null,
       });
+      expect(picturesService.findBlurhashes).toHaveBeenCalledTimes(1);
     });
 
     it('keyset page keeps off-page nested sermons inside the graph', async () => {

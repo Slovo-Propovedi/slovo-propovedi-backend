@@ -5,6 +5,7 @@ import { SectionService } from './section.service';
 import { SectionEntity } from './entities/section.entity';
 import { SectionPlaylistJoinEntity } from './entities/section-playlist-join.entity';
 import { PlaylistService } from 'src/playlist/playlist.service';
+import { PicturesService } from 'src/pictures/pictures.service';
 
 describe('SectionService', () => {
   let service: SectionService;
@@ -19,6 +20,10 @@ describe('SectionService', () => {
         {
           provide: PlaylistService,
           useValue: {},
+        },
+        {
+          provide: PicturesService,
+          useValue: { findBlurhashes: jest.fn().mockResolvedValue(new Map()) },
         },
         {
           provide: getRepositoryToken(SectionEntity),

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { In } from 'typeorm';
 import { PictureEntity } from './entities/picture.entity';
 import { PicturesService } from './pictures.service';
 
@@ -20,6 +21,7 @@ const createRepositoryMock = () => {
       return Promise.resolve({});
     }),
     save: jest.fn((entity: StoredPicture) => Promise.resolve(entity)),
+    find: jest.fn(),
   };
 };
 
@@ -62,6 +64,38 @@ describe('PicturesService', () => {
         blurhash: 'second',
       });
       expect(repository.insert).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('findBlurhashes', () => {
+    it('returns an empty Map without querying for empty input', async () => {
+      const { repository, service } = await setup();
+
+      await expect(service.findBlurhashes([])).resolves.toEqual(new Map());
+      expect(repository.find).not.toHaveBeenCalled();
+    });
+
+    it('queries the requested paths once and maps stored blurhashes by path', async () => {
+      const { repository, service } = await setup();
+      repository.find.mockResolvedValue([
+        { picturePath: 'a.jpg', blurhash: 'hash-a' },
+        { picturePath: 'c.jpg', blurhash: null },
+      ]);
+
+      const result = await service.findBlurhashes(['a.jpg', 'b.jpg', 'c.jpg']);
+
+      expect(repository.find).toHaveBeenCalledTimes(1);
+      expect(repository.find).toHaveBeenCalledWith({
+        select: { picturePath: true, blurhash: true },
+        where: { picturePath: In(['a.jpg', 'b.jpg', 'c.jpg']) },
+      });
+      expect(result).toEqual(
+        new Map([
+          ['a.jpg', 'hash-a'],
+          ['c.jpg', null],
+        ]),
+      );
+      expect(result.has('b.jpg')).toBe(false);
     });
   });
 });

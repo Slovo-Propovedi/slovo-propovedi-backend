@@ -26,6 +26,7 @@
 |------|---------|-----|------------|
 | `id` | `id` | uuid | PK |
 | `title` / `description` / `artist` / `artwork` | — | varchar | NOT NULL |
+| `artworkBlurhash` | — (вычисляемое) | string \| null (в ответе) | BlurHash обложки рядом с `artwork`; не колонка БД — нормализатор берёт значение из `picture` и ставит `null`, пока хэш не посчитан (считается при загрузке через `PicturesService`) |
 | `textFileUrl` / `audioUrl` / `youtubeUrl` | `text-file-url` / `audio-url` / `youtube-url` | varchar | nullable |
 | `book` | `book` | varchar | nullable |
 | `chapter` | `chapter` | json | nullable (`number \| number[]`) — одиночная глава или диапазон `[start, end]` |
