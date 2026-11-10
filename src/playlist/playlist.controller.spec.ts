@@ -10,6 +10,7 @@ import { SectionPlaylistJoinEntity } from 'src/section/entities/section-playlist
 import { SermonService } from 'src/sermon/sermon.service';
 import { FindAllPlaylistsQueryDto } from './dto/find-all-playlists-query.dto';
 import { UsersService } from 'src/users/users.service';
+import { PicturesService } from 'src/pictures/pictures.service';
 
 describe('PlaylistController', () => {
   let controller: PlaylistController;
@@ -31,6 +32,10 @@ describe('PlaylistController', () => {
         {
           provide: SermonService,
           useValue: {},
+        },
+        {
+          provide: PicturesService,
+          useValue: { findBlurhashes: jest.fn().mockResolvedValue(new Map()) },
         },
         {
           provide: getRepositoryToken(PlaylistEntity),
