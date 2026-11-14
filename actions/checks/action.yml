@@ -1,0 +1,41 @@
+# Composite action: repository checks (install, lint, test, build). One
+# implementation shared by the GitHub-hosted CI workflow and the Forgejo
+# fallback path.
+#
+# The caller owns `actions/checkout` and all `timeout-minutes` values (composite
+# action steps do not support them).
+
+name: Repository checks
+description: Install dependencies, lint, test and build the backend.
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: npm
+
+    - name: Install dependencies
+      shell: bash
+      env:
+        HUSKY: 0
+      run: npm ci
+
+    - name: Lint
+      shell: bash
+      run: npm run lint
+
+    - name: Test
+      shell: bash
+      run: npm run test
+
+    - name: Build
+      shell: bash
+      run: npm run build
+
+    - name: Cleanup workspace
+      if: always()
+      shell: bash
+      run: rm -rf node_modules 2>/dev/null || true

@@ -13,6 +13,10 @@ former `slovo-propovedi-admin` monorepo; its former path `backend/` is now the r
 - Update the affected `docs/**` in the same commit as the code change.
 - Record any TODO/hack in the same commit (see `docs/README.md` for the debt-document convention).
 
+**Centralized verification:** full runs are NEVER part of an implementation task and NEVER run in parallel with each other. Agents working on delegated tasks must NOT run project-wide checks on their own (`npm run lint`, `npm test`, `npm run build`, `npm run test:e2e`). During implementation an agent runs only targeted, file-scoped checks: a single test file (`npm test -- <single test path>`) or lint limited to the files it edited.
+
+The full verification pass runs ONCE as a SEPARATE dedicated task, AFTER all implementation tasks are finished: the orchestrator delegates it as a single task and routes any failures back to the responsible agent. Full runs are never executed concurrently — two concurrent full runs hang the machine (laptop freeze). This holds in single-agent and multi-agent sessions alike.
+
 ## Mandatory Workflows: SDD, Plan-Implement, TDD
 
 Every non-trivial task runs through a workflow BEFORE implementation. Workflow skills live in `.opencode/skills/<name>/SKILL.md` with a byte-identical mirror in `.claude/skills/` (keep both copies in sync). Spec-driven commands live in `.opencode/commands/speckit.*.md` (mirrored in `.claude/commands/`).

@@ -1,0 +1,25 @@
+name: CI
+
+# Executed on GitHub-hosted runners; dispatched by the Forgejo orchestrator
+# (.forgejo/workflows/ci.yml). Zero secrets by design.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run repository checks
+        uses: ./actions/checks

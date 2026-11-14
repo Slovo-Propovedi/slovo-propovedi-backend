@@ -36,7 +36,7 @@ jobs:
 
           # Forgejo appends the triggering event to the context, e.g.
           # "CI / check-and-build (push)", so match by prefix rather than equality.
-          for i in $(seq 1 40); do
+          for i in $(seq 1 60); do
             STATE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$URL" | jq -r '.statuses[] | select(.context | startswith("CI / check-and-build")) | .status' | head -1)
 
             case "$STATE" in
@@ -44,7 +44,7 @@ jobs:
               failure|error) echo "::error::CI did not pass for ${{ github.sha }} (status: $STATE). Refusing to deploy."; exit 1 ;;
             esac
 
-            echo "Waiting for CI status on ${{ github.sha }} (attempt $i/40)..."
+            echo "Waiting for CI status on ${{ github.sha }} (attempt $i/60)..."
             sleep 15
           done
 

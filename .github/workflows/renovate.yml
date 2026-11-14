@@ -1,0 +1,78 @@
+name: Renovate
+
+# Runs on GitHub-hosted runners to keep the dependency update (heavy) off the
+# Forgejo host. Requires GitHub org secrets RENOVATE_TOKEN (Forgejo bot PAT),
+# RENOVATE_GITHUB_COM_TOKEN and org var RENOVATE_GIT_AUTHOR. The Forgejo
+# schedule is disabled; .forgejo/workflows/renovate.yml keeps manual dispatch only.
+#
+# Opens PRs on the Forgejo instance (platform=forgejo): bumps npm dependencies,
+# the Dockerfile base images and the Forgejo Actions in .forgejo/workflows.
+# Config lives in ../../renovate.json.
+#
+# Renovate runs straight from npm (`npx renovate`) — same as the Forgejo
+# workflow, so behaviour and config stay identical across executors.
+
+on:
+  # Runs at 06:00 UTC.
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A long overlapping run must not start a second copy.
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Run Renovate
+        id: renovate
+        run: |
+          start=$EPOCHSECONDS
+          npx --yes renovate
+          echo "duration=$((EPOCHSECONDS-start))s" >> "$GITHUB_OUTPUT"
+        env:
+          RENOVATE_PLATFORM: forgejo
+          # Forgejo instance origin; github.server_url on GitHub is github.com
+          # and must NOT be used.
+          RENOVATE_ENDPOINT: https://git.lightnode.ru/api/v1
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          RENOVATE_AUTODISCOVER: "false"
+          # Forgejo repo (underscore org); github.repository here is the
+          # hyphenated GitHub mirror name.
+          RENOVATE_REPOSITORIES: Slovo_Propovedi/slovo-propovedi-backend
+          RENOVATE_ONBOARDING: "false"
+          RENOVATE_GIT_AUTHOR: ${{ vars.RENOVATE_GIT_AUTHOR }}
+          GITHUB_COM_TOKEN: ${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}
+          LOG_LEVEL: info
+
+      - name: Job summary
+        if: always()
+        run: |
+          case "${{ steps.renovate.outcome }}" in
+            success) STATUS='✅ success' ;;
+            failure) STATUS='❌ failure' ;;
+            *) STATUS='⏭️ skipped' ;;
+          esac
+          {
+            echo '## Renovate'
+            echo ''
+            echo "- Repository: \`Slovo_Propovedi/slovo-propovedi-backend\` (Forgejo)"
+            echo "- Event: \`${{ github.event_name }}\`"
+            echo "- Result: $STATUS (${{ steps.renovate.outputs.duration || '—' }})"
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"

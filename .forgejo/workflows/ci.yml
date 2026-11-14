@@ -1,5 +1,18 @@
 name: CI
 
+# Forgejo Actions provides the `github.*` context for GitHub Actions
+# compatibility. `workflow_run` is not supported by Forgejo Actions
+# (https://codeberg.org/forgejo/forgejo/issues/6494), so job ordering is
+# enforced with `needs:` inside this single workflow.
+#
+# Heavy checks run on GitHub-hosted runners via scripts/ci/github-dispatch.sh
+# (`remote`). When the dispatch cannot start a run (queue/infra timeout, exit
+# 42) the `local` job runs the same ./actions/checks composite on the Forgejo
+# runner. `gate` then posts the final `CI / check-and-build` commit status —
+# release.yml waits for that prefix. Automatic job contexts are `CI / remote`,
+# `CI / local` and `CI / gate`, so they never match the polled prefix. A real
+# remote failure (exit 1) is NOT retried locally: it fails `gate`.
+
 on:
   push:
     branches: [main]
@@ -7,38 +20,220 @@ on:
     branches: [main]
 
 jobs:
-  check-and-build:
-    runs-on: ubuntu-24.04
+  remote:
     # Tag pushes should not trigger CI (handled by release.yml).
     # Tags point at commits already checked when they were pushed to main;
     # some Forgejo versions still dispatch this workflow for tag pushes
     # despite the branches filter, so guard explicitly.
     if: github.ref_type != 'tag'
+    runs-on: ubuntu-24.04
+
+    outputs:
+      fallback: ${{ steps.dispatch.outputs.fallback }}
+      superseded: ${{ steps.dispatch.outputs.superseded }}
+      run_url: ${{ steps.dispatch.outputs.run_url }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
+      - name: Dispatch checks to GitHub-hosted runners
+        id: dispatch
         env:
-          HUSKY: 0
-        run: npm ci
+          # Classic PAT (repo + workflow scopes); may be switched to
+          # MIRROR_GITHUB_TOKEN if its scopes suffice.
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+          # Automatic Forgejo token: posts the live `pending` CI status as soon
+          # as the GitHub run is discovered (best-effort).
+          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GitHub org has hyphens, Forgejo org has underscores.
+          GH_REPO: Slovo-Propovedi/slovo-propovedi-backend
+          WORKFLOW: ci.yml
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          # An unconfigured secret must not redden main: degrade to the local
+          # fallback instead of failing the dispatch.
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::CI_GITHUB_TOKEN is not configured — skipping GitHub dispatch, running locally"
+            echo "fallback=true" >> "$GITHUB_OUTPUT"
+            echo "run_url=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          # stdout carries only the machine line `GH_RUN_URL=<url>`, printed
+          # before the long poll; stderr stays attached so run progress streams
+          # live into the job log.
+          DISPATCH_OUT=$(mktemp)
+          bash scripts/ci/github-dispatch.sh > "$DISPATCH_OUT" &
+          DISPATCH_PID=$!
 
-      - name: Lint
-        run: npm run lint
+          pending_posted=false
+          announce_run() {
+            # Forgejo masks org-variable values inside URLs, which breaks the
+            # markdown href; percent-encoded dashes decode to the same URL but
+            # no longer contain the masked literal. The link text stays the raw
+            # run id.
+            local summary_url="${RUN_URL//-/%2D}"
+            {
+              echo '## CI dispatched to GitHub-hosted runners'
+              echo "- Run: [${RUN_URL##*/}]($summary_url) — статус и логи в GitHub Actions"
+            } >> "${GITHUB_STEP_SUMMARY:-/dev/null}" || true
+            # A job summary is rendered only after the job completes, so the
+            # run is also announced as a pending commit status: it shows up on
+            # the commit page immediately, and the gate overwrites it with the
+            # final verdict later.
+            if [ "$pending_posted" != "true" ]; then
+              pending_posted=true
+              bash scripts/ci/forgejo-set-status.sh "${{ github.sha }}" pending "CI / check-and-build" "$RUN_URL" \
+                "Checks running on GitHub-hosted runners" \
+                || echo "note: pending CI status was not posted (best-effort)"
+            fi
+          }
 
-      - name: Test
-        run: npm run test
+          # Publish the run link (and the pending status) as soon as the
+          # dispatcher discovers the run: the step returns only after the poll
+          # (up to RUN_TIMEOUT_MIN), so doing this at the end would be too late.
+          RUN_URL=""
+          for _ in $(seq 1 150); do
+            RUN_URL=$(sed -n 's/^GH_RUN_URL=//p' "$DISPATCH_OUT" | tail -1)
+            if [ -n "$RUN_URL" ]; then
+              announce_run
+              break
+            fi
+            kill -0 "$DISPATCH_PID" 2>/dev/null || break
+            sleep 2
+          done
 
-      - name: Build
-        run: npm run build
+          wait "$DISPATCH_PID"
+          STATUS=$?
+          OUTPUT=$(cat "$DISPATCH_OUT")
+          rm -f "$DISPATCH_OUT"
 
-      - name: Cleanup workspace
-        if: always()
-        run: rm -rf node_modules 2>/dev/null || true
+          # Printed by the dispatcher on the 0/1/42/43 paths (see its header).
+          # Covers a run discovered after the early-summary window (slow mirror).
+          if [ -z "$RUN_URL" ]; then
+            RUN_URL=$(printf '%s\n' "$OUTPUT" | sed -n 's/^GH_RUN_URL=//p' | tail -1)
+            if [ -n "$RUN_URL" ]; then
+              announce_run
+            fi
+          fi
+          set -e
+
+          case "$STATUS" in
+            0)
+              echo "fallback=false" >> "$GITHUB_OUTPUT"
+              ;;
+            42)
+              echo "fallback=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::GitHub-hosted checks unavailable (queue/infra) — using the local fallback"
+              ;;
+            43)
+              echo "fallback=false" >> "$GITHUB_OUTPUT"
+              echo "superseded=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::GitHub run was cancelled externally (superseded by a newer push) — reporting warning, not failure"
+              ;;
+            *)
+              echo "::error::GitHub-hosted checks failed (dispatch exit $STATUS)"
+              exit "$STATUS"
+              ;;
+          esac
+
+          echo "run_url=$RUN_URL" >> "$GITHUB_OUTPUT"
+
+  local:
+    needs: [remote]
+    if: always() && needs.remote.outputs.fallback == 'true'
+    runs-on: ubuntu-24.04
+    # The fallback checks share the 4-GB Forgejo host with deploy jobs; running
+    # them under a concurrency group keeps a GitHub-outage fallback from
+    # overlapping a release/deploy (OOM/exit 137). First consumer of this name
+    # in the repo; add it to the release jobs when they grow heavier.
+    concurrency:
+      group: memory-heavy-jobs
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run repository checks (local fallback)
+        uses: ./actions/checks
+
+  gate:
+    needs: [remote, local]
+    # Tag pushes are already checked when they reached main; a status posted
+    # here would otherwise confuse the release tag's CI lookup.
+    if: always() && github.ref_type != 'tag'
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Post CI verdict
+        env:
+          # Automatic Forgejo Actions token; if the status POST 403s, replace
+          # with a repo secret holding a token with repo-write.
+          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REMOTE_RESULT: ${{ needs.remote.result }}
+          LOCAL_RESULT: ${{ needs.local.result }}
+          SUPERSEDED: ${{ needs.remote.outputs.superseded }}
+          RUN_URL: ${{ needs.remote.outputs.run_url }}
+        run: |
+          status_emoji() {
+            case "$1" in
+              success) printf '✅' ;;
+              failure) printf '❌' ;;
+              cancelled) printf '🟨' ;;
+              warning) printf '⚠️' ;;
+              *) printf '⏭️' ;;
+            esac
+          }
+
+          # A superseded run must never redden the old commit: the newer push
+          # re-runs the checks and reports their result.
+          if [ "${SUPERSEDED:-}" = "true" ] && [ "$LOCAL_RESULT" != "success" ]; then
+            VERDICT=warning
+            DESCRIPTION="Superseded by a newer push — checks re-run on the newer commit"
+          elif [ "$LOCAL_RESULT" = "success" ]; then
+            VERDICT=success
+            DESCRIPTION="Local fallback (GitHub unavailable): checks passed"
+          elif [ "$LOCAL_RESULT" = "skipped" ] && [ "$REMOTE_RESULT" = "success" ]; then
+            VERDICT=success
+            DESCRIPTION="GitHub-hosted checks passed"
+          else
+            VERDICT=failure
+            DESCRIPTION="CI failed (remote: $REMOTE_RESULT, local: $LOCAL_RESULT)"
+          fi
+
+          # The dispatcher only emits a GitHub run URL on the 0/1/42/43 paths;
+          # point the status at this workflow run otherwise. Keep the raw
+          # dispatch URL separately: its absence means the remote never ran, and
+          # the summary row must not pretend the Forgejo URL is a GitHub run.
+          GH_RUN_URL="${RUN_URL:-}"
+          if [ -z "$RUN_URL" ]; then
+            RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
+
+          bash scripts/ci/forgejo-set-status.sh \
+            "${{ github.sha }}" "$VERDICT" "CI / check-and-build" "$RUN_URL" "$DESCRIPTION"
+
+          {
+            echo '## CI'
+            echo ''
+            echo '| Stage | Result |'
+            echo '|---|---|'
+            echo "| remote (GitHub-hosted) | $(status_emoji "$REMOTE_RESULT") $REMOTE_RESULT |"
+            echo "| local (Forgejo fallback) | $(status_emoji "$LOCAL_RESULT") $LOCAL_RESULT |"
+            echo "| verdict | $(status_emoji "$VERDICT") $VERDICT |"
+            if [ -n "$GH_RUN_URL" ]; then
+              echo "| GitHub run | [${GH_RUN_URL##*/}](${GH_RUN_URL//-/%2D}) |"
+            else
+              echo '| GitHub run | — |'
+            fi
+            if [ "${SUPERSEDED:-}" = "true" ]; then
+              echo ''
+              echo 'Superseded by a newer push — checks re-run on the newer commit.'
+            fi
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
